@@ -30,8 +30,10 @@ impl HashTypeGadget {
             }
             TapSighashType::AllPlusAnyoneCanPay => {
                 script! {
-                    // If one use OP_PUSHBYTES_1, it would violate the minimal push rule.
-                    OP_PUSHNUM_NEG1
+                    // Can't push [0x81] directly: CheckMinimalPush requires OP_1NEGATE
+                    // for [0x81], but OP_1NEGATE is a NOP in Tapscript V2.
+                    // Compute 128 + 1 = 129 = Val64 [0x81] instead.
+                    { 128 } OP_1 OP_ADD
                 }
             }
             TapSighashType::NonePlusAnyoneCanPay => {
@@ -56,7 +58,7 @@ impl HashTypeGadget {
             OP_OVER OP_PUSHNUM_1 OP_EQUAL OP_BOOLOR
             OP_OVER OP_PUSHNUM_2 OP_EQUAL OP_BOOLOR
             OP_OVER OP_PUSHNUM_3 OP_EQUAL OP_BOOLOR
-            OP_OVER OP_PUSHNUM_NEG1 OP_EQUAL OP_BOOLOR
+            OP_OVER { 128 } OP_1 OP_ADD OP_EQUAL OP_BOOLOR
             OP_OVER OP_PUSHBYTES_1 OP_SIZE OP_EQUAL OP_BOOLOR
             OP_OVER OP_PUSHBYTES_1 OP_INVERT OP_EQUAL OP_BOOLOR
             OP_VERIFY

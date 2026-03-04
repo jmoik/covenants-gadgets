@@ -97,6 +97,11 @@ pub trait CovenantProgram {
     /// Get the common prefix script.
     fn get_common_prefix() -> Script;
 
+    /// The leaf version for taproot scripts. Defaults to TapScript (0xc0).
+    fn leaf_version() -> LeafVersion {
+        LeafVersion::TapScript
+    }
+
     /// Run the program to move from the previous state to the new state.
     fn run(id: usize, old_state: &Self::State, input: &Self::Input) -> Result<Self::State>;
 }
@@ -125,6 +130,20 @@ pub struct CovenantInput {
     pub new_balance: u64,
 }
 
+fn balanced_tree_depths(n: usize) -> Vec<u8> {
+    fn helper(n: usize, depth: u8, out: &mut Vec<u8>) {
+        if n == 1 {
+            out.push(depth);
+        } else {
+            helper((n + 1) / 2, depth + 1, out);
+            helper(n / 2, depth + 1, out);
+        }
+    }
+    let mut depths = Vec::with_capacity(n);
+    helper(n, 0, &mut depths);
+    depths
+}
+
 /// Initialize the taproot spend info.
 pub fn compute_taproot_spend_info<T: CovenantProgram>() -> TaprootSpendInfo {
     let secp = bitcoin::secp256k1::Secp256k1::new();
@@ -143,17 +162,16 @@ pub fn compute_taproot_spend_info<T: CovenantProgram>() -> TaprootSpendInfo {
 
     let common_prefix = T::get_common_prefix();
 
-    let taproot_builder = TaprootBuilder::with_huffman_tree(scripts.iter().map(|(_, script)| {
-        (
-            1,
-            script! {
-                covenant
-                { common_prefix.clone() }
-                { script.clone() }
-            },
-        )
-    }))
-    .unwrap();
+    let scripts_vec: Vec<_> = scripts.iter().map(|(_, script)| {
+        script! { covenant { common_prefix.clone() } { script.clone() } }
+    }).collect();
+    let depths = balanced_tree_depths(scripts_vec.len());
+    let mut taproot_builder = TaprootBuilder::new();
+    for (script, depth) in scripts_vec.into_iter().zip(depths) {
+        taproot_builder = taproot_builder
+            .add_leaf_with_ver(depth, script, T::leaf_version())
+            .unwrap();
+    }
 
     let taproot_spend_info = taproot_builder.finalize(&secp, internal_key).unwrap();
     taproot_spend_info
@@ -214,7 +232,7 @@ pub fn get_control_block_and_script<T: CovenantProgram>(id: usize) -> (Vec<u8>, 
 
     let mut control_block_bytes = Vec::new();
     taproot_spend_info
-        .control_block(&(script.clone(), LeafVersion::TapScript))
+        .control_block(&(script.clone(), T::leaf_version()))
         .unwrap()
         .encode(&mut control_block_bytes)
         .unwrap();
@@ -233,7 +251,7 @@ pub fn get_tx<T: CovenantProgram>(
     let script_pub_key = get_script_pub_key::<T>();
     let (control_block_bytes, script) = get_control_block_and_script::<T>(id);
 
-    let tap_leaf_hash = TapLeafHash::from_script(&script, LeafVersion::TapScript);
+    let tap_leaf_hash = TapLeafHash::from_script(&script, T::leaf_version());
 
     // Initialize a new transaction.
     let mut tx = Transaction {
