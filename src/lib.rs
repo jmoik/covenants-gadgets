@@ -162,9 +162,12 @@ pub fn compute_taproot_spend_info<T: CovenantProgram>() -> TaprootSpendInfo {
 
     let common_prefix = T::get_common_prefix();
 
-    let scripts_vec: Vec<_> = scripts.iter().map(|(_, script)| {
-        script! { covenant { common_prefix.clone() } { script.clone() } }
-    }).collect();
+    let scripts_vec: Vec<_> = scripts
+        .iter()
+        .map(|(_, script)| {
+            script! { covenant { common_prefix.clone() } { script.clone() } }
+        })
+        .collect();
     let depths = balanced_tree_depths(scripts_vec.len());
     let mut taproot_builder = TaprootBuilder::new();
     for (script, depth) in scripts_vec.into_iter().zip(depths) {

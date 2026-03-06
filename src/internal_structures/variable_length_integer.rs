@@ -32,9 +32,10 @@ impl VariableLengthIntegerGadget {
             // for [0x81], but OP_1NEGATE is a NOP in Tapscript V2.
             // Compute 128 + 1 = 129 = Val64 [0x81] instead.
             Script::from_bytes(vec![
-                OP_PUSHBYTES_1.to_u8(), 0x80, // push 128
-                OP_PUSHNUM_1.to_u8(),          // push 1
-                0x93,                          // OP_ADD: 128 + 1 = 129
+                OP_PUSHBYTES_1.to_u8(),
+                0x80,                 // push 128
+                OP_PUSHNUM_1.to_u8(), // push 1
+                0x93,                 // OP_ADD: 128 + 1 = 129
             ])
         } else if vi.size() == 1 {
             Script::from_bytes(vec![OP_PUSHBYTES_1.to_u8(), bytes[0]])
